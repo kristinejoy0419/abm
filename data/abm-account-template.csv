@@ -1,0 +1,4 @@
+account_name,domain,country,region,industry,employees,engineers,code_platform,eng_hiring_12mo_pct,ai_tools,teams_using_ai,active_seats,prs_per_week,repos_connected,intent_score,intent_topics,pricing_visits,docs_visits,g2_views,community_active,competitor_signal,champion,eng_leader,security,procurement,open_opp,opp_amount
+Example Bank,examplebank.example,US,NA,Financial services,24000,3600,GitHub,18,Copilot; Cursor,6,0,0,0,78,AI code review; Secure code review,5,12,4,N,Compared us vs Competitor A on G2,Y,Y,N,N,Y,450000
+Sample Games,samplegames.example,UK,WE,Gaming,3200,900,GitLab,24,Cursor; Claude Code; Copilot,8,140,480,22,64,Developer productivity,3,20,2,Y,,Y,Y,Y,N,N,0
+Demo Logistics,demologistics.example,Germany,WE,Logistics,8000,700,Bitbucket,2,,1,0,0,0,22,,0,1,0,N,,N,N,N,N,N,0
