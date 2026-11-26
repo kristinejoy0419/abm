@@ -270,7 +270,7 @@ footer{font-size:12px;color:var(--muted);display:grid;gap:4px;border-top:1px sol
     </div>
   </section>
 
-  <section data-tab="summary" class="panel">
+  <section data-tab="summary" class="panel" id="activation-plan" style="scroll-margin-top:16px">
     <div class="panel-head"><h2>Activation plan: plays by tier and level</h2><span class="muted" style="font-size:12px">Tiers set by fit rank. The 200 core accounts are all of Tier 1 plus the top 100 of Tier 2.</span></div>
     <div class="table-scroll"><table class="plays">
       <thead><tr><th>Tier</th><th>Impact</th><th>Not engaged<span class="thsub">Low score, no signal</span></th><th>Engaged<span class="thsub">Warming accounts</span></th><th>Evaluating<span class="thsub">Active + hidden evaluators</span></th><th>Opportunity<span class="thsub">Open deal in CRM</span></th><th>Competitor in play<span class="thsub">Competitor alert</span></th><th>Evangelism<span style="display:block;text-transform:none;letter-spacing:0;font-weight:400;font-size:10px;margin-top:1px">Builds enterprise proof</span></th></tr></thead>
@@ -577,8 +577,10 @@ function showTab(t){if(t!=="summary"&&t!=="working")t="summary";
   document.querySelectorAll("[data-tab]").forEach(el=>el.hidden=el.dataset.tab!==t);
   document.querySelectorAll(".tabs button").forEach(b=>b.setAttribute("aria-selected",b.dataset.t===t));}
 document.querySelectorAll(".tabs button").forEach(b=>b.addEventListener("click",()=>{showTab(b.dataset.t);try{history.replaceState(null,"","#"+b.dataset.t)}catch(e){location.hash=b.dataset.t}}));
-window.addEventListener("hashchange",()=>showTab(location.hash.slice(1)));
-showTab(location.hash.slice(1));
+function goHash(){const h=decodeURIComponent(location.hash.slice(1));const el=h&&h!=="summary"&&h!=="working"?document.getElementById(h):null;
+  const sec=el&&el.closest("[data-tab]");showTab(sec?sec.dataset.tab:h);if(el)requestAnimationFrame(()=>el.scrollIntoView({block:"start"}));}
+window.addEventListener("hashchange",goHash);
+goHash();
 
 // ---- Load real data from a CSV ----
 function parseCSV(t){const rows=[];let row=[],f="",q=false;for(let i=0;i<t.length;i++){const c=t[i];
