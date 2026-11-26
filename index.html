@@ -578,7 +578,8 @@ function showTab(t){if(t!=="summary"&&t!=="working")t="summary";
   document.querySelectorAll(".tabs button").forEach(b=>b.setAttribute("aria-selected",b.dataset.t===t));}
 document.querySelectorAll(".tabs button").forEach(b=>b.addEventListener("click",()=>{showTab(b.dataset.t);try{history.replaceState(null,"","#"+b.dataset.t)}catch(e){location.hash=b.dataset.t}}));
 function goHash(){const h=decodeURIComponent(location.hash.slice(1));const el=h&&h!=="summary"&&h!=="working"?document.getElementById(h):null;
-  const sec=el&&el.closest("[data-tab]");showTab(sec?sec.dataset.tab:h);if(el)requestAnimationFrame(()=>el.scrollIntoView({block:"start"}));}
+  const sec=el&&el.closest("[data-tab]");showTab(sec?sec.dataset.tab:h);if(el){const go=()=>el.scrollIntoView({block:"start"});requestAnimationFrame(go);setTimeout(go,300);
+    if(document.fonts&&document.fonts.ready)document.fonts.ready.then(()=>setTimeout(go,50));window.addEventListener("load",()=>setTimeout(go,50),{once:true});}}
 window.addEventListener("hashchange",goHash);
 goHash();
 
