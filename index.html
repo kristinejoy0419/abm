@@ -210,7 +210,7 @@ footer{font-size:12px;color:var(--muted);display:grid;gap:4px;border-top:1px sol
     <div class="hdr-side">
       <span class="badge" id="badge">Illustrative mock · Sample data · Fictional companies</span><span class="brk"></span>
       <label class="upload" for="csv" title="Uses the ABM account template columns. The file stays in your browser.">Upload your data (CSV)<input type="file" id="csv" accept=".csv,text/csv"></label>
-      <a class="upload" href="data:text/csv;charset=utf-8,account_name%2Cdomain%2Ccountry%2Cregion%2Cindustry%2Cemployees%2Cengineers%2Ccode_platform%2Ceng_hiring_12mo_pct%2Cai_tools%2Cteams_using_ai%2Cactive_seats%2Cprs_per_week%2Crepos_connected%2Cintent_score%2Cintent_topics%2Cpricing_visits%2Cdocs_visits%2Cg2_views%2Ccommunity_active%2Ccompetitor_signal%2Cchampion%2Ceng_leader%2Csecurity%2Cprocurement%2Copen_opp%2Copp_amount%0AExample%20Bank%2Cexamplebank.example%2CUS%2CNA%2CFinancial%20services%2C24000%2C3600%2CGitHub%2C18%2CCopilot%3B%20Cursor%2C6%2C0%2C0%2C0%2C78%2CAI%20code%20review%3B%20Secure%20code%20review%2C5%2C12%2C4%2CN%2CCompared%20us%20vs%20Competitor%20A%20on%20G2%2CY%2CY%2CN%2CN%2CY%2C450000%0ASample%20Games%2Csamplegames.example%2CUK%2CWE%2CGaming%2C3200%2C900%2CGitLab%2C24%2CCursor%3B%20Claude%20Code%3B%20Copilot%2C8%2C140%2C480%2C22%2C64%2CDeveloper%20productivity%2C3%2C20%2C2%2CY%2C%2CY%2CY%2CY%2CN%2CN%2C0%0ADemo%20Logistics%2Cdemologistics.example%2CGermany%2CWE%2CLogistics%2C8000%2C700%2CBitbucket%2C2%2C%2C1%2C0%2C0%2C0%2C22%2C%2C0%2C1%2C0%2CN%2C%2CN%2CN%2CN%2CN%2CN%2C0%0A" download="abm-account-template.csv" style="text-decoration:none">Download CSV template</a>
+      <a class="upload" id="tplDl" href="data:text/csv;charset=utf-8,account_name%2Cdomain%2Ccountry%2Cregion%2Cindustry%2Cemployees%2Cengineers%2Ccode_platform%2Ceng_hiring_12mo_pct%2Cai_tools%2Cteams_using_ai%2Cactive_seats%2Cprs_per_week%2Crepos_connected%2Cintent_score%2Cintent_topics%2Cpricing_visits%2Cdocs_visits%2Cg2_views%2Ccommunity_active%2Ccompetitor_signal%2Cchampion%2Ceng_leader%2Csecurity%2Cprocurement%2Copen_opp%2Copp_amount%0AExample%20Bank%2Cexamplebank.example%2CUS%2CNA%2CFinancial%20services%2C24000%2C3600%2CGitHub%2C18%2CCopilot%3B%20Cursor%2C6%2C0%2C0%2C0%2C78%2CAI%20code%20review%3B%20Secure%20code%20review%2C5%2C12%2C4%2CN%2CCompared%20us%20vs%20Competitor%20A%20on%20G2%2CY%2CY%2CN%2CN%2CY%2C450000%0ASample%20Games%2Csamplegames.example%2CUK%2CWE%2CGaming%2C3200%2C900%2CGitLab%2C24%2CCursor%3B%20Claude%20Code%3B%20Copilot%2C8%2C140%2C480%2C22%2C64%2CDeveloper%20productivity%2C3%2C20%2C2%2CY%2C%2CY%2CY%2CY%2CN%2CN%2C0%0ADemo%20Logistics%2Cdemologistics.example%2CGermany%2CWE%2CLogistics%2C8000%2C700%2CBitbucket%2C2%2C%2C1%2C0%2C0%2C0%2C22%2C%2C0%2C1%2C0%2CN%2C%2CN%2CN%2CN%2CN%2CN%2C0%0A" download="abm-account-template.csv" style="text-decoration:none">Download CSV template</a>
       <span class="up-status" id="upStatus"></span>
     </div>
   </header>
@@ -624,6 +624,12 @@ document.getElementById("csv").addEventListener("change",e=>{const f=e.target.fi
   if(!/\.csv$/i.test(f.name)){st.textContent="Please choose a .csv file. In Excel or Google Sheets, use File > Download > CSV.";return}
   const rd=new FileReader();rd.onload=()=>{try{loadRows(parseCSV(String(rd.result)),f.name)}catch(err){st.textContent="Couldn't read that file. "+err.message+" Check that it uses the template's column names."}};rd.readAsText(f)});
 })();
+
+(function(){var a=document.getElementById("tplDl");if(!a||!window.claude||!window.claude.use)return;
+var st=document.getElementById("upStatus");
+window.claude.use("downloads").then(function(d){if(!d)return;a.addEventListener("click",function(e){e.preventDefault();
+d.save({filename:"abm-account-template.csv",data:decodeURIComponent(a.getAttribute("href").split(",").slice(1).join(","))})
+.catch(function(err){if(st&&err&&err.code!=="declined")st.textContent="Download unavailable here. Get the template from the repo.";});});});})();
 </script>
 </body>
 </html>
