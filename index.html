@@ -1,0 +1,635 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<style>:root{color-scheme:light;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0;font-size:14px}img{max-width:100%}[hidden]{display:none!important}</style>
+<title>ABM Account Scoring: Illustrative Mock</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap">
+<style>
+/* Layout: summary strip, then score model + matrix, account list + detail, activation, outcomes. Cool slate neutrals, teal accent. */
+:root{
+  --bg:#f3f6f7; --surface:#ffffff; --surface-2:#eef3f4; --ink:#12202a; --muted:#5a6a75; --line:#dbe3e7;
+  --accent:#0d7a7e; --accent-soft:#d9eeee;
+  --s-active:#0d7a7e; --s-hidden:#3866cf; --s-warm:#b8862b; --s-cold:#a3afb7;
+  --alert:#c94e25; --alert-soft:#fbe7df; --good:#2e8b57; --warn:#b8862b;
+  --display:"Space Grotesk",system-ui,sans-serif; --body:"Inter",system-ui,-apple-system,"Segoe UI",sans-serif;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0e1418; --surface:#162026; --surface-2:#1c2830; --ink:#e4ecf0; --muted:#93a4ae; --line:#26343c;
+  --accent:#3dbfc3; --accent-soft:#163a3d; --s-active:#3dbfc3; --s-hidden:#7a9cf0; --s-warm:#d9a94a; --s-cold:#5d6c75;
+  --alert:#f07a52; --alert-soft:#3a2219; --good:#58c08a; --warn:#d9a94a; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0e1418; --surface:#162026; --surface-2:#1c2830; --ink:#e4ecf0; --muted:#93a4ae; --line:#26343c;
+  --accent:#3dbfc3; --accent-soft:#163a3d; --s-active:#3dbfc3; --s-hidden:#7a9cf0; --s-warm:#d9a94a; --s-cold:#5d6c75;
+  --alert:#f07a52; --alert-soft:#3a2219; --good:#58c08a; --warn:#d9a94a; color-scheme:dark}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{background:var(--bg);color:var(--ink);font-family:var(--body);font-size:14px;line-height:1.5}
+.wrap{max-width:1240px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:24px 48px;display:grid;grid-template-columns:minmax(0,1fr);gap:20px}
+h1,h2,h3{font-family:var(--display);text-wrap:balance;margin:0;letter-spacing:-.01em}
+h1{font-size:clamp(24px,3.4vw,34px)}
+h2{font-size:19px}
+h3{font-size:15px}
+p{margin:0}
+.muted{color:var(--muted)}
+.num{font-variant-numeric:tabular-nums}
+.eyebrow{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:600}
+.badge{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;padding:4px 10px;border-radius:999px;background:var(--alert-soft);color:var(--alert);border:1px solid color-mix(in srgb,var(--alert) 35%,transparent)}
+header.top{display:flex;flex-wrap:wrap;justify-content:space-between;gap:12px 24px;align-items:flex-end}
+.hdr-side{display:flex;flex-wrap:wrap;align-items:center;justify-content:flex-end;gap:6px 8px;max-width:520px}
+.hdr-side .brk{flex-basis:100%;height:0}
+.upload{cursor:pointer;font-size:12.5px;font-weight:600;color:var(--accent);border:1px solid var(--accent);border-radius:999px;padding:5px 12px;background:var(--surface)}
+.upload:hover{background:var(--accent-soft)}
+.upload:focus-within{outline:2px solid var(--accent);outline-offset:2px}
+.upload input{position:absolute;width:1px;height:1px;opacity:0;overflow:hidden}
+.up-status{font-size:11.5px;color:var(--muted);text-align:right;flex-basis:100%}
+.up-status:empty{display:none}
+@media (max-width:720px){.hdr-side{justify-content:flex-start}.up-status{text-align:left}}
+header.top .lede{max-width:640px;color:var(--muted);margin-top:6px}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:18px;min-width:0}
+.panel-head{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:baseline;gap:6px 16px;margin-bottom:14px}
+.kpis{display:grid;grid-template-columns:repeat(6,1fr);gap:1px;background:var(--line);border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.kpi{background:var(--surface);padding:14px 16px;display:grid;gap:2px}
+.kpi b{font-family:var(--display);font-size:26px;font-weight:600;font-variant-numeric:tabular-nums}
+.kpi em.fixed{display:block;font-style:normal;font-size:11px;color:var(--muted);opacity:.85;margin-top:4px}
+.kpi span{font-size:12px;color:var(--muted)}
+.grid-2{display:grid;grid-template-columns:1.05fr 1fr;gap:20px}
+.grid-main{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:20px;align-items:start}
+.grid-3{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+/* score model */
+.pillars{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+.pillar{border:1px solid var(--line);border-radius:8px;padding:12px;background:var(--surface-2);display:grid;gap:8px;align-content:start}
+.pillar h3{display:flex;justify-content:space-between;align-items:baseline}
+.pillar h3 .w{font-family:var(--body);font-size:13px;color:var(--accent);font-variant-numeric:tabular-nums}
+.pillar ul{margin:0;padding-left:16px;color:var(--muted);font-size:12.5px;display:grid;gap:2px}
+.pillar li strong{color:var(--ink);font-weight:600}
+input[type=range]{width:100%;accent-color:var(--accent)}
+.note{font-size:12.5px;color:var(--muted);border-left:3px solid var(--accent);padding:6px 10px;background:var(--accent-soft);border-radius:0 6px 6px 0;margin-top:12px}
+.note strong{color:var(--ink)}
+/* scatter */
+.chart svg{width:100%;height:auto;display:block}
+.legend{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:12px;color:var(--muted);margin-top:8px}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:5px;vertical-align:-1px}
+/* filters + table */
+.filters{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:7px;overflow:hidden}
+.seg button{all:unset;cursor:pointer;padding:5px 10px;font-size:12.5px;color:var(--muted);border-right:1px solid var(--line)}
+.seg button:last-child{border-right:0}
+.seg button[aria-pressed=true]{background:var(--accent);color:var(--surface);font-weight:600}
+.seg button:focus-visible,.row:focus-visible,.linkbtn:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.table-scroll{overflow-x:auto;border:1px solid var(--line);border-radius:8px}
+table{border-collapse:collapse;width:100%;min-width:760px;font-size:13px}
+th{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:600;text-align:left;padding:8px 10px;background:var(--surface-2);border-bottom:1px solid var(--line);white-space:nowrap}
+td{padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:middle;white-space:nowrap}
+tr.row{cursor:pointer}
+tr.row:hover td{background:var(--surface-2)}
+tr.row.sel td{background:var(--accent-soft)}
+td.n,th.n{text-align:right;font-variant-numeric:tabular-nums}
+.acct{font-weight:600}
+.acct small{display:block;font-weight:400;color:var(--muted);font-size:11.5px}
+.pill{display:inline-block;font-size:11.5px;font-weight:600;padding:2px 8px;border-radius:999px;border:1px solid currentColor;line-height:1.4}
+.p-active{color:var(--s-active)} .p-hidden{color:var(--s-hidden)} .p-warm{color:var(--s-warm)} .p-cold{color:var(--muted)}
+.m-Leaders{color:var(--accent)} .m-Adopters{color:var(--s-hidden)} .m-Late{color:var(--muted)}
+.tier{font-family:var(--display);font-weight:600;font-size:12px;padding:2px 7px;border-radius:5px;background:var(--surface-2);border:1px solid var(--line)}
+.bar{display:inline-block;width:64px;height:6px;border-radius:3px;background:var(--line);vertical-align:middle;margin-left:8px;position:relative;overflow:hidden}
+.bar i{position:absolute;inset:0 auto 0 0;background:var(--accent);border-radius:3px}
+.dots{display:inline-flex;gap:3px}
+.dots i{width:10px;height:10px;border-radius:50%;border:1.5px solid var(--accent)}
+.dots i.on{background:var(--accent)}
+.core{font-size:10.5px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--accent);border:1px solid var(--accent);border-radius:4px;padding:0 4px;margin-left:4px;vertical-align:1px}
+.actions{display:grid;grid-template-columns:repeat(5,1fr);gap:10px}
+.act{all:unset;box-sizing:border-box;cursor:pointer;display:grid;gap:4px;align-content:start;border:1px solid var(--line);border-radius:8px;padding:12px;background:var(--surface)}
+.act:hover{border-color:var(--accent);background:var(--accent-soft)}
+.act:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.act b{font-family:var(--display);font-size:24px;font-variant-numeric:tabular-nums;line-height:1.1}
+.act .what{font-size:12.5px;font-weight:600}
+.act .do{font-size:12.5px;color:var(--muted)}
+.act .own{font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--accent)}
+.custom-chip{display:flex;align-items:center;gap:10px;font-size:12.5px;margin-bottom:10px;padding:6px 10px;border-radius:6px;background:var(--accent-soft)}
+.custom-chip button{all:unset;cursor:pointer;color:var(--accent);font-weight:600}
+@media (max-width:1020px){.actions{grid-template-columns:repeat(2,1fr)}}
+@media (max-width:480px){.actions{grid-template-columns:1fr}}
+.tabs{display:flex;gap:4px;border-bottom:1px solid var(--line)}
+.tabs button{all:unset;cursor:pointer;padding:8px 14px;font-weight:600;font-size:13.5px;color:var(--muted);border-bottom:2px solid transparent;margin-bottom:-1px}
+.tabs button[aria-selected=true]{color:var(--ink);border-bottom-color:var(--accent)}
+.tabs button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.journey{display:grid;gap:6px}
+.journey div{display:grid;grid-template-columns:56px 1fr;gap:2px 10px;font-size:12.5px;border:1px solid var(--line);border-radius:6px;padding:7px 10px}
+.journey b{grid-row:span 2;font-family:var(--display)}
+.journey em{font-style:normal;color:var(--muted);font-size:11.5px}
+.flag{color:var(--alert);font-weight:700;font-size:12px}
+.linkbtn{all:unset;cursor:pointer;color:var(--accent);font-weight:600;font-size:13px;margin-top:10px;display:inline-block}
+/* detail */
+.detail{position:sticky;top:calc(env(safe-area-inset-top,0px) + 12px);display:grid;gap:14px}
+.detail-label{display:grid;gap:2px;border-bottom:1px solid var(--line);padding-bottom:10px}
+.detail-label span{font-size:13px;color:var(--accent);font-weight:600}
+.detail .kv{display:grid;grid-template-columns:auto 1fr;gap:4px 12px;font-size:12.5px}
+.detail .kv dt{color:var(--muted)} .detail .kv dd{margin:0;font-weight:500}
+.scorerow{display:grid;grid-template-columns:96px 1fr 30px;align-items:center;gap:8px;font-size:12.5px}
+.track{height:8px;background:var(--line);border-radius:4px;overflow:hidden}
+.track i{display:block;height:100%;background:var(--accent);border-radius:4px}
+.sig{font-size:12.5px;display:grid;gap:3px;margin:0;padding-left:16px;color:var(--muted)}
+.sig b{color:var(--ink);font-weight:600}
+.roles{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.role{font-size:12px;border:1px solid var(--line);border-radius:6px;padding:6px 8px;display:flex;justify-content:space-between;gap:6px}
+.role.on{border-color:var(--accent);background:var(--accent-soft)}
+.role em{font-style:normal;color:var(--muted)}
+.next{background:var(--surface-2);border-radius:8px;padding:10px 12px;font-size:12.5px}
+.next b{display:block;margin-bottom:2px}
+/* tiers */
+.tiercard{border:1px solid var(--line);border-radius:8px;padding:14px;display:grid;gap:10px;align-content:start}
+.tiercard .big{font-family:var(--display);font-size:28px;font-weight:600}
+.tiercard ul{margin:0;padding-left:16px;font-size:12.5px;color:var(--muted);display:grid;gap:3px}
+.minis{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;border-top:1px solid var(--line);padding-top:10px}
+.minis div{display:grid;font-size:11.5px;color:var(--muted)}
+.minis b{font-size:16px;color:var(--ink);font-variant-numeric:tabular-nums;font-family:var(--display)}
+.heat{width:100%;border-collapse:separate;border-spacing:4px;min-width:0}
+.heat th{background:none;border:0;padding:4px;text-transform:none;letter-spacing:0;font-size:12px}
+.heat td{border:0;text-align:center;border-radius:6px;padding:9px 4px;font-weight:600;font-variant-numeric:tabular-nums}
+/* alerts */
+.alerts{display:grid;gap:8px}
+.alert{display:grid;grid-template-columns:auto 1fr auto;gap:4px 12px;align-items:start;border:1px solid var(--line);border-left:3px solid var(--alert);border-radius:6px;padding:9px 12px;font-size:12.5px}
+.alert .who{font-weight:600}
+.alert .when{color:var(--muted);font-size:11.5px;white-space:nowrap}
+.alert .play{grid-column:2 / 4;color:var(--muted)}
+.alert .play b{color:var(--ink);font-weight:600}
+.reps{display:grid;gap:7px}
+.rep{display:grid;grid-template-columns:70px 1fr 42px;align-items:center;gap:8px;font-size:12.5px}
+.rep .track{position:relative;height:10px;overflow:visible}
+.rep .track i{background:var(--good)}
+.rep .track i.low{background:var(--warn)}
+.rep .track s{position:absolute;top:-4px;bottom:-4px;width:2px;background:var(--ink);opacity:.55}
+.flow{list-style:none;margin:0;padding:0;display:flex;flex-wrap:wrap;gap:6px;counter-reset:f}
+.flow li{counter-increment:f;font-size:12.5px;font-weight:600;padding:6px 12px 6px 8px;border-radius:999px;background:var(--surface-2);border:1px solid var(--line)}
+.flow li::before{content:counter(f);display:inline-grid;place-items:center;width:18px;height:18px;border-radius:50%;background:var(--accent);color:var(--surface);font-size:11px;margin-right:6px}
+.lvl{display:grid;grid-template-columns:56px 1fr;gap:10px;align-items:center;margin-bottom:10px;font-size:12.5px}
+.stack{display:flex;height:24px;border-radius:5px;overflow:hidden;background:var(--line)}
+.stack i{display:grid;place-items:center;font-style:normal;font-size:11.5px;font-weight:600;color:var(--surface);font-variant-numeric:tabular-nums;min-width:0;overflow:hidden}
+.triggers{display:grid;gap:6px}
+.triggers div{display:grid;grid-template-columns:1fr 1fr;gap:10px;font-size:12.5px;border:1px solid var(--line);border-radius:6px;padding:7px 10px}
+.triggers span{color:var(--muted)}
+.triggers span::before{content:"If ";font-weight:700;color:var(--accent)}
+.triggers b{font-weight:600}
+.triggers .via .ttag{display:inline-block;font-weight:600;color:var(--ink);background:var(--surface-2);border:1px solid var(--line);border-radius:4px;padding:0 6px;margin-right:6px}
+.triggers .via .ttag::before{content:none}
+.triggers .via{grid-column:1 / -1;font-size:11.5px;color:var(--muted);border-top:1px dashed var(--line);padding-top:4px}
+.req{font-size:12.5px;color:var(--muted);background:var(--surface-2);border:1px solid var(--line);border-radius:6px;padding:8px 12px;margin-bottom:12px}
+.req b{color:var(--ink)}
+.triggers b::before{content:"Then ";color:var(--accent)}
+table.plays{min-width:1120px}
+table.plays thead th{vertical-align:top}
+.thsub{display:block;text-transform:none;letter-spacing:0;font-weight:400;font-size:10px;margin-top:1px}
+table.plays td{white-space:normal;vertical-align:top;font-size:12.5px;line-height:1.45;width:14%}
+table.plays tbody th{background:var(--surface-2);text-transform:none;letter-spacing:0;font-size:13px;color:var(--ink);vertical-align:top;border-bottom:1px solid var(--line);font-family:var(--display)}
+table.plays tbody th small{display:block;font-family:var(--body);font-weight:400;color:var(--muted);font-size:11.5px;white-space:normal}
+
+table.plays td.res{color:var(--muted);font-size:12px;width:16%;min-width:170px}
+table.plays tbody th,table.plays thead th:first-child{white-space:normal;width:150px;min-width:150px;max-width:150px}
+table.plays td.res b{color:var(--ink);font-variant-numeric:tabular-nums}
+table.plays tbody th small b{color:var(--ink);font-weight:600}
+table.plays tr.t0 th,table.plays tr.t0 td{background:color-mix(in srgb,var(--accent) 6%,var(--surface))}
+@media (max-width:720px){.triggers div{grid-template-columns:1fr;gap:2px}}
+footer{font-size:12px;color:var(--muted);display:grid;gap:4px;border-top:1px solid var(--line);padding-top:14px;margin-top:8px;padding-bottom:48px}
+@media (max-width:1020px){.kpis{grid-template-columns:repeat(3,1fr)}.grid-2,.grid-main{grid-template-columns:1fr}.detail{position:static}}
+@media (max-width:720px){.pillars,.grid-3{grid-template-columns:1fr}.kpis{grid-template-columns:repeat(2,1fr)}}
+@media (prefers-reduced-motion:no-preference){.track i,.bar i{transition:width .3s ease}}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header class="top">
+    <div>
+      <div class="eyebrow" id="eyebrow">Account-based growth · 3,500 scored accounts · 200 core · North America + Western Europe</div>
+      <h1>ABM Account Scoring and Activation</h1>
+      <p class="lede">How we turn target accounts into pipeline. Score each account on fit and buying signals. Tier it. Run the right play for its engagement level. Track buying committee coverage and the pipeline it creates.</p>
+    </div>
+    <div class="hdr-side">
+      <span class="badge" id="badge">Illustrative mock · Sample data · Fictional companies</span><span class="brk"></span>
+      <label class="upload" for="csv" title="Uses the ABM account template columns. The file stays in your browser.">Upload your data (CSV)<input type="file" id="csv" accept=".csv,text/csv"></label>
+      <a class="upload" id="tplDl" href="data:text/csv;charset=utf-8,account_name%2Cdomain%2Ccountry%2Cregion%2Cindustry%2Cemployees%2Cengineers%2Ccode_platform%2Ceng_hiring_12mo_pct%2Cai_tools%2Cteams_using_ai%2Cactive_seats%2Cprs_per_week%2Crepos_connected%2Cintent_score%2Cintent_topics%2Cpricing_visits%2Cdocs_visits%2Cg2_views%2Ccommunity_active%2Ccompetitor_signal%2Cchampion%2Ceng_leader%2Csecurity%2Cprocurement%2Copen_opp%2Copp_amount%0AExample%20Bank%2Cexamplebank.example%2CUS%2CNA%2CFinancial%20services%2C24000%2C3600%2CGitHub%2C18%2CCopilot%3B%20Cursor%2C6%2C0%2C0%2C0%2C78%2CAI%20code%20review%3B%20Secure%20code%20review%2C5%2C12%2C4%2CN%2CCompared%20us%20vs%20Competitor%20A%20on%20G2%2CY%2CY%2CN%2CN%2CY%2C450000%0ASample%20Games%2Csamplegames.example%2CUK%2CWE%2CGaming%2C3200%2C900%2CGitLab%2C24%2CCursor%3B%20Claude%20Code%3B%20Copilot%2C8%2C140%2C480%2C22%2C64%2CDeveloper%20productivity%2C3%2C20%2C2%2CY%2C%2CY%2CY%2CY%2CN%2CN%2C0%0ADemo%20Logistics%2Cdemologistics.example%2CGermany%2CWE%2CLogistics%2C8000%2C700%2CBitbucket%2C2%2C%2C1%2C0%2C0%2C0%2C22%2C%2C0%2C1%2C0%2CN%2C%2CN%2CN%2CN%2CN%2CN%2C0%0A" download="abm-account-template.csv" style="text-decoration:none">Download CSV template</a>
+      <span class="up-status" id="upStatus"></span>
+    </div>
+  </header>
+
+  <nav class="tabs" role="tablist" aria-label="Views">
+    <button role="tab" id="tab-summary" data-t="summary" aria-selected="true">Exec summary</button>
+    <button role="tab" id="tab-working" data-t="working" aria-selected="false">Working view</button>
+  </nav>
+  <section class="kpis" id="kpis" aria-label="Summary"></section>
+
+  <section data-tab="working" class="panel">
+    <div class="panel-head"><h2>Act this week</h2><span class="muted" style="font-size:12px">Click an action to see its accounts</span></div>
+    <div class="actions" id="actions"></div>
+  </section>
+
+  <section data-tab="summary">
+    <div class="panel">
+      <div class="panel-head"><h2>How the score works</h2><span class="muted" style="font-size:12px">Drag to test weights. Rankings, stages, active evaluators, their committee coverage and actions update.</span></div>
+      <div class="pillars">
+        <div class="pillar">
+          <h3>Fit <span class="w" id="wFv">40%</span></h3>
+          <input type="range" id="wF" min="0" max="100" value="40" aria-label="Fit weight">
+          <ul>
+            <li><strong>AI maturity (60%)</strong></li>
+            <li>Engineering hiring rate</li>
+            <li>AI and dev tools in use</li>
+            <li>Teams using them</li>
+            <li><strong>Firmographics (40%)</strong></li>
+            <li>Eng headcount, code platform, industry, region</li>
+          </ul>
+        </div>
+        <div class="pillar">
+          <h3>Product usage <span class="w" id="wPv">30%</span></h3>
+          <input type="range" id="wP" min="0" max="100" value="30" aria-label="Product usage weight">
+          <ul>
+            <li>Active seats</li>
+            <li>PRs reviewed per week</li>
+            <li>Repos connected</li>
+            <li>Teams on the product</li>
+            <li>Engineers using us on open source or personal projects</li>
+            <li class="muted">Today's PQA. Strong for mid-market.</li>
+          </ul>
+        </div>
+        <div class="pillar">
+          <h3>Intent + engagement <span class="w" id="wIv">30%</span></h3>
+          <input type="range" id="wI" min="0" max="100" value="30" aria-label="Intent weight">
+          <ul>
+            <li>6sense / Demandbase surge</li>
+            <li>G2 category and compare visits</li>
+            <li>Pricing and docs visits</li>
+            <li>Community, events, ads</li>
+            <li class="muted">Catches enterprise buyers who can't trial.</li>
+          </ul>
+        </div>
+      </div>
+      <p class="note"><strong>Score = Fit + Product usage + Intent, each times its weight.</strong> The three weights always add up to 100%, so raising one lowers the other two. <strong>Fit uses account traits only.</strong> Weights are tuned against closed-won deals. In this sample, AI Leaders win at 5x the rate of Late accounts.</p>
+    </div>
+  </section>
+
+  <section data-tab="summary" class="panel">
+    <div class="panel-head"><h2>Activation plan: plays by tier and level</h2><span class="muted" style="font-size:12px">Tiers set by fit rank. The 200 core accounts are all of Tier 1 plus the top 100 of Tier 2.</span></div>
+    <div class="table-scroll"><table class="plays">
+      <thead><tr><th>Tier</th><th>Impact</th><th>Not engaged<span class="thsub">Low score, no signal</span></th><th>Engaged<span class="thsub">Warming accounts</span></th><th>Evaluating<span class="thsub">Active + hidden evaluators</span></th><th>Opportunity<span class="thsub">Open deal in CRM</span></th><th>Competitor in play<span class="thsub">Competitor alert</span></th><th>Evangelism<span style="display:block;text-transform:none;letter-spacing:0;font-weight:400;font-size:10px;margin-top:1px">Builds enterprise proof</span></th></tr></thead>
+      <tbody>
+        <tr class="t0"><th>Tier 0 · Evergreen growth<small>Whole market, always on. Also reaches Tiers 1–3.</small></th><td class="res">Feeds Tier 3 with new surging accounts</td><td><b>Media mix:</b> AI search citations. Sponsored content on high-authority dev sites. Community and Reddit with DevRel. Paid search and social. Organic content.</td><td>Webinars. Email nurture.</td><td>Product-led nurture: trial and docs prompts. Moves to Tier 3 on surge.</td><td>Route to sales. Customer stories and case studies.</td><td>Comparison content.</td><td>G2 reviews. Community champions. Social and open-source mentions.</td></tr>
+        <tr><th>Tier 1 · 1:1<small><b>100 accounts</b> · top by fit<br>Account exec, solutions engineer and marketer</small></th><td class="res" id="res1"></td><td>Invite eng leaders to an exec newsletter. Personal AI maturity benchmark. Invite to a peer-led virtual briefing.</td><td>Roundtable or exec dinner invite. Multi-thread the committee.</td><td>Guided POC on a sandbox repo. Security pack. Exec sponsor call.</td><td>Mutual close plan. ROI review with eng leader. Procurement kit.</td><td>Bake-off plan and side-by-side results in 48 hours.</td><td>Named case study with metrics. Joint ads featuring their eng leaders. Event and webinar speaker. Reference calls. Advisory board.</td></tr>
+        <tr><th>Tier 2 · 1:few<small><b>400 accounts</b> · next by fit<br>Grouped by industry and stack</small></th><td class="res" id="res2"></td><td>Programmatic and LinkedIn ads. Stack-specific content.</td><td>Virtual roundtable. Use-case webinar. Rep alert.</td><td>Rep and solutions engineer outreach. Peer customer proof. Scoped pilot.</td><td>Reference call. Fast-track security review.</td><td>Comparison guide. Switch offer.</td><td>Industry case study and quotes. Hosts a peer roundtable. G2 reviews.</td></tr>
+        <tr><th>Tier 3 · 1:many<small><b>3,000 accounts</b> · next by fit<br>Automated</small></th><td class="res" id="res3"></td><td class="muted">Included in evergreen growth.</td><td>Role-based ads. Email to opted-in contacts. Retargeting.</td><td>Usage nurture. Role-based ads to missing roles. Move up on surge.</td><td>Rep takes over. Self-serve upgrade path.</td><td>Comparison ads. Comparison email to opted-in contacts.</td><td>G2 reviews. Usage stats and quotes. Referral program.</td></tr>
+      </tbody>
+    </table></div>
+    <p class="note"><strong>Evangelism is how we build enterprise.</strong> Enterprise buyers want proof from peers their size before they commit. Every Tier 1 win should leave behind a story, a reference and a voice we can use with the next 400 accounts.</p>
+  </section>
+
+  <section data-tab="working" class="panel" id="activation">
+    <div class="panel-head"><h2>Engagement tracker</h2><span class="muted" style="font-size:12px">Who is engaged, at what level, and what we do next</span></div>
+    <p class="req"><b>Requires:</b> Salesforce (CRM) · 6sense or Demandbase (intent) · product usage synced to Salesforce (warehouse + Hightouch or Census) · ZoomInfo or Clay (contacts) · Outreach or Salesloft (sequences) · Marketo or HubSpot (nurture) · G2 Buyer Intent · Slack alerts · agreed sales follow-up times · consent tracking for Europe (GDPR)</p>
+    <ol class="flow"><li>Score the account</li><li>Set the tier</li><li>Read the engagement level</li><li>Run the play</li><li>Track committee and pipeline</li></ol>
+    <div class="grid-2" style="margin-top:16px">
+      <div>
+        <h3 style="margin-bottom:10px">Engagement level by tier</h3>
+        <div id="levels"></div>
+        <div class="legend"><span><i style="background:var(--s-cold)"></i>Not engaged</span><span><i style="background:var(--s-warm)"></i>Engaged</span><span><i style="background:var(--s-hidden)"></i>Evaluating</span><span><i style="background:var(--s-active)"></i>Opportunity</span></div>
+      </div>
+      <div>
+        <h3 style="margin-bottom:10px">Automated triggers</h3>
+        <div class="triggers">
+          <div><span>Intent surge, no security contact</span><b>Add the account to an always-on security campaign. Champion loops in security with the security pack.</b><small class="via"><span class="ttag">Tiers 1–2</span> Runs on: 6sense or Demandbase → LinkedIn ads (security job titles across all surging accounts) + Salesforce task to the rep</small></div>
+          <div><span>10+ active seats in a Tier 3 account</span><b>Move to Tier 2. Alert the rep.</b><small class="via"><span class="ttag">Tier 3</span> Runs on: Product usage data → Salesforce → Slack</small></div>
+          <div><span>3+ pricing visits in a week</span><b>Alert the rep with context. Follow up with known contacts within 24 hours.</b><small class="via"><span class="ttag">All tiers</span> Runs on: 6sense or Demandbase → Salesforce task</small></div>
+          <div><span>Competitor compare on G2</span><b>Send bake-off kit. Alert the account exec and solutions engineer.</b><small class="via"><span class="ttag">All tiers</span> Runs on: G2 Buyer Intent → Salesforce → Slack</small></div>
+          <div><span>Champion changes jobs, or new VP Eng or AI lead hired</span><b>Add to committee. Personal outreach from the rep.</b><small class="via"><span class="ttag">Tiers 1–2</span> Runs on: UserGems or Sales Navigator → Salesforce → Outreach</small></div>
+          <div><span>Tier 1 quiet for 60 days</span><b>Refresh outreach: update contacts, new angle, new offer.</b><small class="via"><span class="ttag">Tier 1</span> Runs on: Salesforce + 6sense → ZoomInfo or Clay refresh</small></div>
+        </div>
+        <p class="muted" style="font-size:12.5px;margin-top:8px">Sample month: 640 contacts added, 35 accounts moved up a tier, 22 competitor plays run.</p>
+      </div>
+    </div>
+  </section>
+
+  <section data-tab="working" class="grid-2">
+    <div class="panel">
+      <div class="panel-head"><h2>Buying committee coverage</h2><span class="muted" style="font-size:12px">% of accounts with each role engaged</span></div>
+      <div class="table-scroll" style="border:0"><table class="heat" id="heat"></table></div>
+      <p class="note"><strong>Automation fills gaps.</strong> When a Tier 3 account surges and a role is missing, the account joins a role-based ad campaign that targets that job title across all surging accounts. Enrichment finds the contacts so the rep or champion can make the intro. <span id="autoadd"></span></p>
+    </div>
+    <div class="panel">
+      <div class="panel-head"><h2>Competitor evaluation alerts</h2><span class="muted" style="font-size:12px">Last 10 days · competitor names hidden</span></div>
+      <div class="alerts" id="alerts"></div>
+    </div>
+  </section>
+
+
+  <section data-tab="working" class="grid-main">
+    <div class="panel">
+      <div class="panel-head" id="accounts"><h2>Accounts</h2><span class="muted" style="font-size:12px" id="count"></span></div>
+      <div class="custom-chip" id="customChip" hidden></div>
+      <div class="filters" role="group" aria-label="Filters">
+        <div class="seg" data-f="tier"><button aria-pressed="true" data-v="all">All tiers</button><button aria-pressed="false" data-v="1">Tier 1</button><button aria-pressed="false" data-v="2">Tier 2</button><button aria-pressed="false" data-v="3">Tier 3</button></div>
+        <div class="seg" data-f="region"><button aria-pressed="true" data-v="all">All regions</button><button aria-pressed="false" data-v="NA">N. America</button><button aria-pressed="false" data-v="WE">W. Europe</button></div>
+        <div class="seg" data-f="maturity"><button aria-pressed="true" data-v="all">All maturity</button><button aria-pressed="false" data-v="Leaders">Leaders</button><button aria-pressed="false" data-v="Adopters">Adopters</button><button aria-pressed="false" data-v="Late">Late</button></div>
+        <div class="seg" data-f="stage"><button aria-pressed="true" data-v="all">All stages</button><button aria-pressed="false" data-v="active">Active</button><button aria-pressed="false" data-v="hidden">Hidden</button><button aria-pressed="false" data-v="warm">Warming</button></div>
+      </div>
+      <div class="table-scroll">
+        <table>
+          <thead><tr><th>Account</th><th>Tier</th><th>AI maturity</th><th class="n">Fit</th><th class="n">Usage</th><th class="n">Intent</th><th class="n">Score</th><th>Stage</th><th>Committee</th><th>Alert</th></tr></thead>
+          <tbody id="tbody"></tbody>
+        </table>
+      </div>
+      <button class="linkbtn" id="more">Show all</button>
+    </div>
+    <aside class="panel detail" id="detail" aria-live="polite"></aside>
+  </section>
+
+  <section data-tab="summary" class="grid-2">
+    <div class="panel">
+      <div class="panel-head"><h2>Pipeline and win rate by tier</h2><span class="muted" style="font-size:12px">Trailing 2 quarters</span></div>
+      <div id="pipe"></div>
+      <div style="margin-top:18px">
+        <h3 style="margin-bottom:8px">Win rate by AI maturity <span class="muted" style="font-weight:400;font-size:12px">· closed-won check</span></h3>
+        <div id="matwin"></div>
+      </div>
+    </div>
+    <div class="panel">
+      <div class="panel-head"><h2>New logos</h2><span class="muted" style="font-size:12px">Engaged accounts with no prior contract</span></div>
+      <div id="funnel"></div>
+      <div style="margin-top:18px">
+        <h3 style="margin-bottom:8px">Pipeline coverage by cohort <span class="muted" style="font-weight:400;font-size:12px">· line = 3x quota</span></h3>
+        <div class="reps" id="cohorts" style="margin-bottom:16px"></div>
+        <h3 style="margin-bottom:8px">Rep pipeline coverage <span class="muted" style="font-weight:400;font-size:12px">· line = 3x quota</span></h3>
+        <div class="reps" id="reps"></div>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    <div><strong>Illustrative mock.</strong> All companies, people and numbers are fictional sample data. Not real customer or company data.</div>
+    <div>Sources a live version would use: CRM, product usage, 6sense or Demandbase, G2 buyer intent, web analytics, community, job postings and technographics.</div>
+  </footer>
+</div>
+
+<script>
+(function(){
+function rng(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
+const R=rng(20261125);
+const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+const pick=a=>a[Math.floor(R()*a.length)];
+function shuffle(a){a=a.slice();for(let i=a.length-1;i>0;i--){const j=Math.floor(R()*(i+1));[a[i],a[j]]=[a[j],a[i]]}return a}
+
+const first=["Arborvale","Bramblin","Cinderly","Driftholm","Emberline","Fennick","Glaciera","Hollowell","Indigrove","Jasperton","Kelpwise","Lanternly","Mosaiq","Nettleby","Oakmoor","Pebblecrest","Quillford","Rookhaven","Saffronet","Thistlebay","Uplandia","Valewick","Wrenfield","Yondera"];
+const second=[["Analytics","Software"],["Bank","Financial services"],["Cloud","Software"],["Freight","Logistics"],["Games","Gaming"],["Health","Healthcare"],["Insurance","Financial services"],["Labs","Software"],["Media","Media"],["Mobility","Automotive"],["Pay","Fintech"],["Retail","Retail"]];
+const indScore={"Software":100,"Fintech":100,"Gaming":95,"Financial services":85,"Media":75,"Logistics":70,"Automotive":75,"Healthcare":70,"Retail":72};
+const naC=["US","US","US","US","Canada"], weC=["UK","UK","Germany","France","Netherlands","Sweden","Ireland"];
+const toolPool=["Copilot","Cursor","Claude Code","Windsurf","Codex","Devin"];
+const teamPool=["Platform","Mobile","Web","Data","Infra","Payments","Security","ML","Core API","Growth","SRE","Search"];
+const stemA=["Arbor","Bramble","Cinder","Drift","Ember","Fenn","Glacier","Hollow","Indi","Jasper","Kelp","Lantern","Mosa","Nettle","Oak","Pebble","Quill","Rook","Saffron","Thistle","Upland","Vale","Wren","Yonder","Alder","Birch","Copper","Dune","Elm","Flint","Grove","Heron","Iris","Juno","Kite","Lark","Moss","North","Opal","Pine","Quarry","Rill","Slate","Tern","Umber","Vesper","Willow","Zinc"];
+const stemB=["wick","holm","ly","ton","crest","ford","haven","field","mere","gate","stone","brook","vale","wise","line","worth"];
+const combos=shuffle(stemA.flatMap(a=>stemB.map(b=>a+b)).flatMap(f=>second.map(s=>[f,s]))).slice(0,3500);
+
+const A=combos.map(([f,s],i)=>{
+  const m=Math.pow(R(),0.85);
+  const employees=Math.round(Math.exp(Math.log(1200)+R()*Math.log(60000/1200))/100)*100;
+  const segment=employees>=10000?"Enterprise":employees>=2000?"Emerging enterprise":"Mid-market";
+  const engineers=Math.round(employees*(0.12+R()*0.18));
+  const hiring=clamp(Math.round(-4+m*26+(R()-.5)*10),-8,35);
+  const nt=clamp(Math.round(m*4.5+(R()-.5)*2),0,5);
+  const tools=shuffle(toolPool).slice(0,nt);
+  const nteams=clamp(Math.round(1+m*9+(R()-.5)*4),0,12);
+  const teams=shuffle(teamPool).slice(0,nteams);
+  const ai=clamp(Math.round(100*(0.4*clamp((hiring+5)/30,0,1)+0.35*(nt/5)+0.25*(nteams/12))),0,100);
+  const maturity=ai>=62?"Leaders":ai>=38?"Adopters":"Late";
+  const pr=R(); const platform=pr<.62?"GitHub":pr<.88?"GitLab":"Bitbucket";
+  const platScore={GitHub:100,GitLab:85,Bitbucket:45}[platform];
+  const size=clamp((Math.log(engineers)-Math.log(150))/(Math.log(9000)-Math.log(150)),0,1)*100;
+  const firmo=0.45*size+0.35*platScore+0.2*indScore[s[1]];
+  const fit=clamp(Math.round(0.6*ai+0.4*firmo),0,100);
+  const region=R()<.6?"NA":"WE"; const country=region==="NA"?pick(naC):pick(weC);
+  const canTrial=segment==="Mid-market"||R()<(segment==="Enterprise"?0.3:0.55);
+  let pqa=0,seats=0,prs=0,repos=0;
+  if(canTrial){pqa=clamp(Math.round(m*70+R()*35-12),0,100);seats=Math.round(pqa/100*engineers*0.12);prs=Math.round(seats*3.4);repos=seats?Math.max(1,Math.round(seats/7)):0;if(!seats)pqa=0}
+  const intent=clamp(Math.round(m*50+R()*48-14),0,100);
+  const topics=intent>=55?shuffle(["AI code review","Code quality","Developer productivity","Secure code review","PR automation"]).slice(0,2):[];
+  const g2=Math.round(intent/14+R()*2), pricing=Math.round(intent/10*R()*2), docs=Math.round(intent/6*R()*2);
+  const community=R()<intent/130;
+  return {id:i,name:f+" "+s[0],industry:s[1],employees,engineers,segment,hiring,tools,teams,ai,maturity,platform,fit,firmo:Math.round(firmo),region,country,pqa,seats,prs,repos,canTrial,intent,topics,g2,pricing,docs,community};
+});
+// tiers by fit rank
+A.slice().sort((a,b)=>b.fit-a.fit).forEach((a,r)=>{a.tier=r<100?1:r<500?2:3;a.core=r<200});
+const roleNames=["Champion","Eng leader","Security","Procurement"], roleMult=[1.15,0.95,0.6,0.42];
+A.forEach(a=>{if(a.tier<3&&R()<.28){a.intent=Math.round(a.intent*.45);a.topics=[];a.pqa=0;a.seats=0;a.prs=0;a.repos=0;a.community=false;a.pricing=0;a.g2=Math.min(a.g2,1)}});
+A.forEach(a=>{const base={1:.6,2:.36,3:.12}[a.tier];a.roles=roleMult.map(mu=>R()<clamp(base*mu+a.intent/280+(a.pqa>0?.15:0),0,.97));a.contacts=a.roles.filter(Boolean).length*2+Math.round(R()*3)});
+// competitor alerts
+const comps=["Competitor A","Competitor B","Competitor C"];
+const sigs=[c=>`Compared us vs ${c} on G2`,c=>`Job post asks for ${c} experience`,c=>`Intent surge on ${c} pricing and docs`,c=>`Champion asked about ${c} in community`,c=>`${c} ads clicked by 4 engineers`];
+const alertAccts=shuffle(A.filter(a=>a.intent>=55)).slice(0,8).map(a=>{const c=pick(comps);a.alert={c,text:pick(sigs)(c),days:1+Math.floor(R()*9)};return a}).sort((x,y)=>x.alert.days-y.alert.days);
+
+let W={F:40,P:30,I:30};
+const state={tier:"all",region:"all",maturity:"all",stage:"all",limit:15,sel:null};
+function score(a){const s=W.F+W.P+W.I||1;return Math.round((W.F*a.fit+W.P*a.pqa+W.I*a.intent)/s)}
+function engage(a){const s=W.P+W.I||1;return Math.round((W.P*a.pqa+W.I*a.intent)/s)}
+function stage(a){const c=score(a);if(a.pqa<15&&a.intent>=60)return"hidden";if(c>=62&&(a.pqa>=45||a.intent>=62))return"active";if(c>=45)return"warm";return"cold"}
+const stageLabel={active:"Active evaluator",hidden:"Hidden evaluator",warm:"Warming",cold:"Not engaged"};
+const stageVar={active:"--s-active",hidden:"--s-hidden",warm:"--s-warm",cold:"--s-cold"};
+const pct=x=>Math.round(x*100)+"%";
+A.forEach(a=>{const st=stage(a);a.opp=(st==="active"||st==="hidden")&&R()<({1:.4,2:.22,3:.06}[a.tier])});
+function level(a){if(a.opp)return"opp";const st=stage(a);return st==="active"||st==="hidden"?"eval":st==="warm"?"eng":"none"}
+function renderLevels(){const cols={none:"--s-cold",eng:"--s-warm",eval:"--s-hidden",opp:"--s-active"};
+  document.getElementById("levels").innerHTML=[1,2,3].map(t=>{const g=A.filter(a=>a.tier===t);const c={none:0,eng:0,eval:0,opp:0};g.forEach(a=>c[level(a)]++);
+  return `<div class="lvl"><b>Tier ${t}</b><div class="stack" role="img" aria-label="Tier ${t}: ${c.none} not engaged, ${c.eng} engaged, ${c.eval} evaluating, ${c.opp} opportunity">${["none","eng","eval","opp"].map(k=>c[k]?`<i style="width:${c[k]/g.length*100}%;background:var(${cols[k]})">${c[k]}</i>`:"").join("")}</div></div>`}).join("")}
+
+function renderKPIs(){
+  const st=A.map(stage);const act=st.filter(s=>s==="active").length, hid=st.filter(s=>s==="hidden").length;
+  const cov=A.reduce((t,a)=>t+a.roles.filter(Boolean).length/4,0)/A.length;
+  const evs=A.filter(a=>stage(a)==="active"),covCore=evs.length?evs.reduce((t,a)=>t+a.roles.filter(Boolean).length/4,0)/evs.length:0;
+  const ent=A.filter(a=>a.segment==="Enterprise"), entNo=ent.filter(a=>a.pqa===0).length;
+  document.getElementById("kpis").innerHTML=[
+    [A.length.toLocaleString(),"Scored accounts<br>"+(state.loaded?A.filter(a=>a.core).length:200)+" core"],[act,"Active evaluators<em class=\"fixed\">Score 62+ with strong usage or intent.</em>"],[hid,"Hidden evaluators<br>(intent, no usage)"],
+    [pct(entNo/ent.length),"Enterprise accounts<br>with no product usage<em class=\"fixed\">Based on headcount and seats. Weights don't change it.</em>"],[pct(covCore),"Committee coverage<br>active evaluators"],[state.loaded?"$"+(A.reduce((s,a)=>s+(a.oppAmount||0),0)/1e6).toFixed(1)+"M":"$17.7M",state.loaded?"Open pipeline in file":"ABM pipeline · 29% win rate"]
+  ].map(([v,l])=>`<div class="kpi"><b>${v}</b><span>${l}</span></div>`).join("");
+}
+
+function renderScatter(){if(!document.getElementById("scatter"))return;
+  const w=560,h=360,p={l:44,r:14,t:14,b:38};const X=v=>p.l+v/100*(w-p.l-p.r), Y=v=>h-p.b-v/100*(h-p.t-p.b);
+  let s=`<svg viewBox="0 0 ${w} ${h}" role="img" aria-label="Scatter of fit score versus engagement score">`;
+  s+=`<rect x="${X(60)}" y="${Y(100)}" width="${X(100)-X(60)}" height="${Y(60)-Y(100)}" fill="var(--accent-soft)"/>`;
+  for(let v=0;v<=100;v+=20){s+=`<line x1="${X(0)}" x2="${X(100)}" y1="${Y(v)}" y2="${Y(v)}" stroke="var(--line)"/><text x="${X(0)-8}" y="${Y(v)+4}" font-size="11" text-anchor="end" fill="var(--muted)">${v}</text>`;
+    s+=`<text x="${X(v)}" y="${h-p.b+16}" font-size="11" text-anchor="middle" fill="var(--muted)">${v}</text>`}
+  s+=`<line x1="${X(60)}" x2="${X(60)}" y1="${Y(0)}" y2="${Y(100)}" stroke="var(--muted)" stroke-dasharray="3 3"/><line x1="${X(0)}" x2="${X(100)}" y1="${Y(60)}" y2="${Y(60)}" stroke="var(--muted)" stroke-dasharray="3 3"/>`;
+  const lab=(x,y,t,a)=>`<text x="${x}" y="${y}" font-size="11.5" font-weight="600" text-anchor="${a}" fill="var(--muted)">${t}</text>`;
+  s+=lab(X(99),Y(100)+14,"Go now","end")+lab(X(1),Y(100)+14,"Engaged, lower fit","start")+lab(X(99),Y(0)-8,"Build demand","end")+lab(X(1),Y(0)-8,"Deprioritize","start");
+  A.slice().sort((a,b)=>b.tier-a.tier).forEach(a=>{const st=stage(a);const r={1:6,2:4,3:2.2}[a.tier];
+    s+=`<circle cx="${X(a.fit).toFixed(1)}" cy="${Y(engage(a)).toFixed(1)}" r="${state.sel===a.id?r+3:r}" fill="var(${stageVar[st]})" fill-opacity="${a.tier===3?(st==="cold"?.3:.55):(st==="cold"?.55:.85)}" stroke="${state.sel===a.id?"var(--ink)":"var(--surface)"}" stroke-width="${state.sel===a.id?2:1}" data-id="${a.id}" style="cursor:pointer"><title>${a.name} · Fit ${a.fit} · Engagement ${engage(a)}</title></circle>`});
+  s+=`<text x="${(X(0)+X(100))/2}" y="${h-4}" font-size="11.5" text-anchor="middle" fill="var(--muted)">Fit score (account traits only)</text>`;
+  s+=`<text transform="translate(12 ${(Y(0)+Y(100))/2}) rotate(-90)" font-size="11.5" text-anchor="middle" fill="var(--muted)">Engagement (usage + intent)</text></svg>`;
+  const el=document.getElementById("scatter");el.innerHTML=s;
+  el.querySelectorAll("circle[data-id]").forEach(c=>c.addEventListener("click",()=>select(+c.dataset.id)));
+}
+
+function filtered(){return A.filter(a=>(!state.custom||state.custom(a))&&(state.tier==="all"||a.tier==+state.tier)&&(state.region==="all"||a.region===state.region)&&(state.maturity==="all"||a.maturity===state.maturity)&&(state.stage==="all"||stage(a)===state.stage)).sort((a,b)=>score(b)-score(a))}
+function renderTable(){
+  const rows=filtered();const show=rows.slice(0,state.limit);
+  document.getElementById("count").textContent=`${rows.length.toLocaleString()} accounts · sorted by score`;
+  document.getElementById("more").textContent=`Show 25 more (${show.length} of ${rows.length.toLocaleString()} shown)`;
+  document.getElementById("more").hidden=rows.length<=state.limit;
+  document.getElementById("tbody").innerHTML=show.map(a=>{const st=stage(a),sc=score(a);
+    return `<tr class="row${state.sel===a.id?" sel":""}" tabindex="0" data-id="${a.id}">
+    <td class="acct">${a.name}${a.core?' <span class="core">Core</span>':""}<small>${a.industry} · ${a.country} · ${a.segment}</small></td>
+    <td><span class="tier">T${a.tier}</span></td><td><span class="pill m-${a.maturity}">${a.maturity}</span></td>
+    <td class="n">${a.fit}</td><td class="n">${a.pqa||"–"}</td><td class="n">${a.intent}</td>
+    <td class="n"><b>${sc}</b><span class="bar"><i style="width:${sc}%"></i></span></td>
+    <td><span class="pill p-${st}">${stageLabel[st]}</span></td>
+    <td><span class="dots" title="${roleNames.filter((r,i)=>a.roles[i]).join(", ")||"None engaged"}">${a.roles.map(o=>`<i class="${o?"on":""}"></i>`).join("")}</span></td>
+    <td>${a.alert?`<span class="flag" title="${a.alert.text}">● ${a.alert.c.replace("Competitor ","Comp. ")}</span>`:""}</td></tr>`}).join("")||`<tr><td colspan="10" class="muted">No accounts match these filters.</td></tr>`;
+  document.querySelectorAll("tr.row").forEach(r=>{r.addEventListener("click",()=>select(+r.dataset.id));r.addEventListener("keydown",e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();select(+r.dataset.id)}})});
+}
+
+function nextStep(a,st){
+  if(a.alert)return["Competitor in play",a.tier===1?"Account exec + solutions engineer: send bake-off plan and security pack this week.":"Start comparison sequence and targeted ads to the eval team."];
+  if(st==="hidden")return["Evaluating without a trial",a.tier===1?"Offer a guided POC on a sandbox repo. Brief security early.":"Send ROI calculator and security docs. Offer a scoped pilot."];
+  if(st==="active"){const miss=roleNames.filter((r,i)=>!a.roles[i]);return["Ready for sales",miss.length?`Multi-thread: reach ${miss.join(" and ")}.`:"Full committee engaged. Push to commit."]}
+  if(st==="warm")return["Warming",a.tier===3?"Keep in automated nurture. Alert rep on next surge.":"Invite to industry roundtable. Run 1:few ads."];
+  return["Not engaged",a.fit>=60?"High fit, no signal. Run awareness ads to eng leaders.":"Low priority. Monitor only."];
+}
+function renderDetail(){
+  const a=A.find(x=>x.id===state.sel)||filtered()[0];if(!a){document.getElementById("detail").innerHTML="";return}
+  const st=stage(a),[nh,nb]=nextStep(a,st);
+  const sr=(l,v)=>`<div class="scorerow"><span>${l}</span><span class="track"><i style="width:${v}%"></i></span><b class="num">${v}</b></div>`;
+  document.getElementById("detail").innerHTML=`
+  <div class="detail-label"><h2>Account detail</h2><span>Click any account in the list to switch</span></div><div><div class="eyebrow">Tier ${a.tier}${a.core?" · Core 200":""} · ${a.region==="NA"?"North America":"Western Europe"}</div><h2>${a.name}</h2>
+  <div style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap"><span class="pill p-${st}">${stageLabel[st]}</span><span class="pill m-${a.maturity}">AI ${a.maturity}</span></div></div>
+  <div style="display:grid;gap:6px">${sr("Score",score(a))}${sr("Fit",a.fit)}${sr("AI maturity",a.ai)}${sr("Usage",a.pqa)}${sr("Intent",a.intent)}</div>
+  <dl class="kv"><dt>Engineers</dt><dd class="num">${a.engineers.toLocaleString()} of ${a.employees.toLocaleString()}</dd><dt>Eng hiring</dt><dd class="num">${a.hiring>0?"+":""}${a.hiring}% (12 mo)</dd><dt>AI tools</dt><dd>${a.tools.join(", ")||"None found"}</dd><dt>Teams using</dt><dd>${a.teams.length?a.teams.slice(0,4).join(", ")+(a.teams.length>4?` +${a.teams.length-4}`:""):a.teamCount?a.teamCount+" teams":"None found"}</dd><dt>Code platform</dt><dd>${a.platform}</dd></dl>
+  <ul class="sig">${a.pqa?`<li><b>Usage:</b> ${a.seats} seats, ${a.prs} PRs/wk, ${a.repos} repos</li>`:`<li><b>Usage:</b> none${a.canTrial?"":" (trial blocked)"}</li>`}
+  <li><b>Intent:</b> ${a.topics.length?"surging on "+a.topics.join(", "):"no surge"}</li><li><b>Web:</b> ${a.pricing} pricing, ${a.docs} docs visits · ${a.g2} G2 views</li>${a.community?"<li><b>Community:</b> active members</li>":""}${a.alert?`<li style="color:var(--alert)"><b style="color:var(--alert)">Alert:</b> ${a.alert.text} (${a.alert.days?a.alert.days+"d ago":"new"})</li>`:""}</ul>
+  <div><h3 style="margin-bottom:6px">Buying committee</h3><div class="roles">${roleNames.map((r,i)=>`<div class="role ${a.roles[i]?"on":""}"><span>${r}</span><em>${a.roles[i]?"Engaged":"Not reached"}</em></div>`).join("")}</div></div>
+  <div class="next"><b>Next step: ${nh}</b>${nb}</div>`;
+}
+
+const tierInfo={1:{t:"Tier 1 · 1:1",tag:"Top 100 by fit",ul:["Account pod: account exec, solutions engineer and marketer","Exec briefings and custom POC","Security pack before it's asked for","Field dinners and roundtables"],pipe:8.4},
+  2:{t:"Tier 2 · 1:few",tag:"Next 400",ul:["Grouped by industry and stack","Targeted ads and use-case content","Virtual roundtables","Rep alerts on surges"],pipe:6.1},
+  3:{t:"Tier 3 · 1:many",tag:"Next 3,000",ul:["Automated, intent-triggered programs","Programmatic and LinkedIn ads","Auto-add missing contacts","Usage-based nurture"],pipe:3.2}};
+function renderTiers(){
+  [1,2,3].forEach(t=>{const g=A.filter(a=>a.tier===t),st=g.map(stage);const ev=st.filter(s=>s==="active"||s==="hidden").length;const ge=g.filter(a=>stage(a)==="active");const cov=ge.length?ge.reduce((s,a)=>s+a.roles.filter(Boolean).length/4,0)/ge.length:0;const i=tierInfo[t];
+    document.getElementById("res"+t).innerHTML=`<div><b>${st.filter(s=>s==="active").length}</b> active evaluators</div><div><b>${st.filter(s=>s==="hidden").length}</b> hidden evaluators</div><div><b>${st.filter(s=>s==="warm").length}</b> warming</div><div style="border-bottom:1px solid var(--line);padding-bottom:4px;margin-bottom:4px"><b>${st.filter(s=>s==="cold").length}</b> not engaged</div><div><b>${pct(cov)}</b> committee coverage on active evaluators</div><div><b>$${i.pipe}M</b> pipeline</div>`});
+  const rows=[1,2,3].map(t=>{const g=A.filter(a=>a.tier===t);return roleNames.map((r,i)=>g.filter(a=>a.roles[i]).length/g.length)});
+  const cell=v=>`<td style="background:color-mix(in srgb,var(--accent) ${Math.round(12+v*78)}%,var(--surface));color:${v>.45?"var(--surface)":"var(--ink)"}">${pct(v)}</td>`;
+  document.getElementById("heat").innerHTML=`<tr><th></th>${roleNames.map(r=>`<th>${r}</th>`).join("")}<th>3+ roles</th></tr>`+[1,2,3].map((t,k)=>{const g=A.filter(a=>a.tier===t);const three=g.filter(a=>a.roles.filter(Boolean).length>=3).length/g.length;return `<tr><th style="text-align:left">Tier ${t}</th>${rows[k].map(cell).join("")}${cell(three)}</tr>`}).join("");
+  document.getElementById("autoadd").textContent="Sample month: 640 contacts added across 210 accounts.";
+}
+function renderAlerts(){
+  document.getElementById("alerts").innerHTML=alertAccts.map(a=>`<div class="alert"><span class="tier">T${a.tier}</span><span class="who">${a.name}<br><span style="font-weight:400">${a.alert.text}</span></span><span class="when">${a.alert.days?a.alert.days+"d ago":"New"}</span>
+  <span class="play"><b>Play:</b> ${a.tier===1?"Account exec + solutions engineer send bake-off plan and security pack.":a.tier===2?"Rep alert plus comparison content to eval team.":"Comparison ads to the account. Email opted-in contacts."}</span></div>`).join("");
+}
+function hbars(el,data,max,fmt,extra){
+  document.getElementById(el).innerHTML=data.map(d=>`<div class="scorerow" style="grid-template-columns:110px 1fr 64px;margin-bottom:6px"><span>${d[0]}</span><span class="track" style="height:14px"><i style="width:${d[1]/max*100}%;${d[2]?"background:"+d[2]:""}"></i></span><b class="num" style="text-align:right">${fmt(d[1])}</b></div>`).join("")+(extra||"");
+}
+function renderOutcomes(){
+  hbars("pipe",[["Tier 1",8.4],["Tier 2",6.1],["Tier 3",3.2]],9,v=>"$"+v.toFixed(1)+"M",
+    `<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:12px">${[["Tier 1","36%"],["Tier 2","27%"],["Tier 3","19%"],["Holdout","14%"]].map(([l,v])=>`<div style="border:1px solid var(--line);border-radius:6px;padding:8px;text-align:center"><b style="font-family:var(--display);font-size:18px" class="num">${v}</b><div class="muted" style="font-size:11.5px">${l} win rate</div></div>`).join("")}</div><p class="muted" style="font-size:12px;margin-top:8px">Lift is measured against a holdout: 10% of matched accounts get no ABM plays.</p>
+  <h3 style="margin:14px 0 8px">Typical path to a win</h3>
+  <div class="journey">
+    <div><b>Tier 1</b><span>Exec newsletter → roundtable → guided POC → security review → close</span><em>~5 months · 7 contacts engaged</em></div>
+    <div><b>Tier 2</b><span>Industry ads → webinar → rep outreach → scoped pilot → close</span><em>~4 months · 4 contacts engaged</em></div>
+    <div><b>Tier 3</b><span>Engineers try it → seats grow → moves to Tier 2 → rep takes over → close</span><em>~3 months · 3 contacts engaged</em></div>
+  </div>`);
+  hbars("matwin",[["Leaders",34],["Adopters",19],["Late",7]],40,v=>v+"%");
+  const f=[["Engaged",610,"var(--s-warm)"],["Opportunity",140,"var(--s-hidden)"],["Won",38,"var(--good)"],["Lost",27,"var(--alert)"],["Still open",75,"var(--s-cold)"]];
+  hbars("funnel",f,610,v=>v,`<p class="muted" style="font-size:12.5px;margin-top:8px">Closed so far: <b style="color:var(--ink)">38 won, 27 lost</b>. Lost reasons: competitor 12, no decision 9, budget 6.</p>`);
+  document.getElementById("cohorts").innerHTML=[["Mid-market",3.8],["Emerging ent.",2.9],["Enterprise",2.5]].map(([n,v])=>`<div class="rep" style="grid-template-columns:110px 1fr 42px"><span>${n}</span><span class="track"><i class="${v<3?"low":""}" style="width:${v/4.5*100}%"></i><s style="left:${3/4.5*100}%"></s></span><b class="num" style="text-align:right">${v.toFixed(1)}x</b></div>`).join("");
+  const reps=[["Rep 1","NA",3.6],["Rep 2","NA",3.3],["Rep 3","NA",2.6],["Rep 4","NA",3.9],["Rep 5","WE",3.1],["Rep 6","WE",2.4],["Rep 7","WE",3.4],["Rep 8","WE",3.0]];
+  document.getElementById("reps").innerHTML=reps.map(([n,r,v])=>`<div class="rep"><span>${n} <span class="muted">${r}</span></span><span class="track"><i class="${v<3?"low":""}" style="width:${v/4.5*100}%"></i><s style="left:${3/4.5*100}%"></s></span><b class="num" style="text-align:right">${v.toFixed(1)}x</b></div>`).join("")+`<p class="muted" style="font-size:12.5px;margin-top:4px">Under 3x? Marketing adds accounts and plays to that territory.</p>`;
+}
+
+function select(id){state.sel=id;renderTable();renderDetail();renderScatter();if(window.innerWidth<1020)document.getElementById("detail").scrollIntoView({behavior:"smooth",block:"start"})}
+function renderAll(){renderActions();renderLevels();renderKPIs();renderScatter();renderTable();renderDetail()}
+["F","P","I"].forEach(k=>document.getElementById("w"+k).addEventListener("input",e=>{const v=+e.target.value;const o=["F","P","I"].filter(j=>j!==k);const rest=100-v,os=W[o[0]]+W[o[1]];
+  let a=os?Math.round(W[o[0]]/os*rest):Math.round(rest/2);W[k]=v;W[o[0]]=a;W[o[1]]=rest-a;
+  ["F","P","I"].forEach(j=>{document.getElementById("w"+j).value=W[j];document.getElementById("w"+j+"v").textContent=W[j]+"%"});renderAll();renderTiers()}));
+document.querySelectorAll(".seg").forEach(g=>g.addEventListener("click",e=>{const b=e.target.closest("button");if(!b)return;g.querySelectorAll("button").forEach(x=>x.setAttribute("aria-pressed",x===b));state[g.dataset.f]=b.dataset.v;state.limit=15;renderTable()}));
+document.getElementById("more").addEventListener("click",()=>{state.limit+=25;renderTable()});
+state.sel=A.slice().sort((a,b)=>score(b)-score(a)).find(a=>a.tier===1&&stage(a)==="hidden")?.id ?? null;
+renderAll();renderTiers();renderAlerts();renderOutcomes();
+
+// ---- Act this week ----
+function isEval(a){const st=stage(a);return st==="active"||st==="hidden"}
+function actionList(){return [
+  {own:"Account exec + solutions engineer",what:"Tier 1 hidden evaluators",do:"Offer a guided POC on a sandbox repo.",f:a=>a.tier===1&&stage(a)==="hidden"},
+  {own:"Account exec + solutions engineer",what:"Competitor evaluations",do:"Send the bake-off plan this week.",f:a=>!!a.alert},
+  {own:"Rep",what:"Tier 1 evaluating, no security contact",do:"Ask the champion for a security intro.",f:a=>a.tier===1&&isEval(a)&&!a.roles[2]},
+  {own:"Marketing ops",what:"Tier 3 ready to move up",do:"Approve the move to Tier 2.",f:a=>a.tier===3&&a.seats>=10&&stage(a)==="active"&&score(a)>=76},
+  {own:"Marketing",what:"Reps under 3x coverage",do:"Add accounts and plays to their territory.",reps:true}
+]}
+function renderActions(){const el=document.getElementById("actions");if(!el)return;
+  const L=actionList();el.innerHTML=L.map((x,i)=>`<button class="act" data-i="${i}"><span class="own">${x.own}</span><b>${x.reps?document.querySelectorAll("#reps .track i.low").length||2:A.filter(x.f).length}</b><span class="what">${x.what}</span><span class="do">${x.do}</span></button>`).join("");
+  el.querySelectorAll(".act").forEach(b=>b.addEventListener("click",()=>{const x=L[+b.dataset.i];
+    if(x.reps){showTab("summary");document.getElementById("reps").scrollIntoView({behavior:"smooth",block:"center"});return}
+    state.custom=x.f;state.limit=15;const c=document.getElementById("customChip");c.hidden=false;
+    c.innerHTML=`<span>Showing: <b>${x.what}</b> · ${x.do}</span><button type="button" id="clearCustom">Clear</button>`;
+    document.getElementById("clearCustom").addEventListener("click",()=>{state.custom=null;c.hidden=true;renderTable()});
+    const first=filtered()[0];if(first)state.sel=first.id;renderTable();renderDetail();
+    document.getElementById("accounts").scrollIntoView({behavior:"smooth",block:"start"})}))}
+renderActions();
+
+// ---- Tabs ----
+function showTab(t){if(t!=="summary"&&t!=="working")t="summary";
+  document.querySelectorAll("[data-tab]").forEach(el=>el.hidden=el.dataset.tab!==t);
+  document.querySelectorAll(".tabs button").forEach(b=>b.setAttribute("aria-selected",b.dataset.t===t));}
+document.querySelectorAll(".tabs button").forEach(b=>b.addEventListener("click",()=>{showTab(b.dataset.t);try{history.replaceState(null,"","#"+b.dataset.t)}catch(e){location.hash=b.dataset.t}}));
+window.addEventListener("hashchange",()=>showTab(location.hash.slice(1)));
+showTab(location.hash.slice(1));
+
+// ---- Load real data from a CSV ----
+function parseCSV(t){const rows=[];let row=[],f="",q=false;for(let i=0;i<t.length;i++){const c=t[i];
+  if(q){if(c==='"'){if(t[i+1]==='"'){f+='"';i++}else q=false}else f+=c}
+  else if(c==='"')q=true;else if(c===','){row.push(f);f=""}else if(c==='\n'||c==='\r'){if(c==='\r'&&t[i+1]==='\n')i++;row.push(f);f="";if(row.some(x=>x.trim()!==""))rows.push(row);row=[]}else f+=c}
+  row.push(f);if(row.some(x=>x.trim()!==""))rows.push(row);
+  const h=rows.shift().map(x=>x.trim().toLowerCase());return rows.map(r=>Object.fromEntries(h.map((k,i)=>[k,(r[i]||"").trim()])))}
+const yes=v=>/^(y|yes|true|1)$/i.test(v||"");
+const num=v=>{const n=parseFloat(String(v||"").replace(/[$,%\s]/g,""));return isFinite(n)?n:0};
+const list=v=>String(v||"").split(/[;|]/).map(x=>x.trim()).filter(Boolean);
+const WE=["uk","united kingdom","germany","france","netherlands","sweden","ireland","spain","italy","denmark","norway","finland","belgium","switzerland","austria","portugal"];
+function fromRow(r,i){
+  const employees=num(r.employees)||1000, engineers=num(r.engineers)||Math.round(employees*.2);
+  const hiring=num(r.eng_hiring_12mo_pct), tools=list(r.ai_tools), nteams=num(r.teams_using_ai);
+  const ai=clamp(Math.round(100*(0.4*clamp((hiring+5)/30,0,1)+0.35*Math.min(tools.length,5)/5+0.25*Math.min(nteams,12)/12)),0,100);
+  const platform=/gitlab/i.test(r.code_platform)?"GitLab":/bitbucket/i.test(r.code_platform)?"Bitbucket":"GitHub";
+  const industry=r.industry||"Software";
+  const size=clamp((Math.log(Math.max(engineers,1))-Math.log(150))/(Math.log(9000)-Math.log(150)),0,1)*100;
+  const firmo=0.45*size+0.35*({GitHub:100,GitLab:85,Bitbucket:45}[platform])+0.2*(indScore[industry]||75);
+  const seats=num(r.active_seats),prs=num(r.prs_per_week),repos=num(r.repos_connected);
+  const pqa=seats?clamp(Math.round(40*Math.min(seats/Math.max(engineers*.1,1),1)+35*Math.min(prs/Math.max(engineers*.3,1),1)+25*Math.min(repos/20,1)),1,100):0;
+  const country=r.country||"";const region=/^(we|w\. ?europe|western europe|emea)$/i.test(r.region)||WE.includes(country.toLowerCase())?"WE":"NA";
+  const a={id:i,name:r.account_name||("Account "+(i+1)),industry,employees,engineers,segment:employees>=10000?"Enterprise":employees>=2000?"Emerging enterprise":"Mid-market",hiring,tools,teams:[],teamCount:nteams,ai,
+    maturity:ai>=62?"Leaders":ai>=38?"Adopters":"Late",platform,fit:clamp(Math.round(0.6*ai+0.4*firmo),0,100),firmo:Math.round(firmo),region,country:country||region,
+    pqa,seats,prs,repos,canTrial:true,intent:clamp(Math.round(num(r.intent_score)),0,100),topics:list(r.intent_topics),g2:num(r.g2_views),pricing:num(r.pricing_visits),docs:num(r.docs_visits),
+    community:yes(r.community_active),roles:[yes(r.champion),yes(r.eng_leader),yes(r.security),yes(r.procurement)],opp:yes(r.open_opp),oppAmount:num(r.opp_amount)};
+  if(r.competitor_signal)a.alert={c:"Competitor",text:r.competitor_signal,days:0};
+  return a}
+function loadRows(rows,fname){
+  const next=rows.filter(r=>r.account_name).map(fromRow);if(!next.length)throw new Error("No rows with an account_name column were found.");
+  A.length=0;next.forEach(a=>A.push(a));const n=A.length;
+  const t1=Math.max(1,Math.round(n*100/3500)),t2=Math.max(1,Math.round(n*500/3500)),core=Math.max(1,Math.round(n*200/3500));
+  A.slice().sort((a,b)=>b.fit-a.fit).forEach((a,r)=>{a.tier=r<t1?1:r<t2?2:3;a.core=r<core});
+  alertAccts.length=0;A.filter(a=>a.alert).forEach(a=>alertAccts.push(a));
+  [1,2,3].forEach(t=>{tierInfo[t].pipe=+(A.filter(a=>a.tier===t).reduce((s,a)=>s+a.oppAmount,0)/1e6).toFixed(1)});
+  state.loaded=true;state.limit=15;state.sel=A.slice().sort((a,b)=>score(b)-score(a))[0].id;
+  renderAll();renderTiers();renderAlerts();
+  document.getElementById("badge").textContent="Your data · "+fname;
+  document.getElementById("eyebrow").textContent=`Account-based growth · ${n.toLocaleString()} scored accounts · from ${fname}`;
+  document.getElementById("upStatus").textContent=`Loaded ${n.toLocaleString()} accounts. Outcome charts at the bottom still show sample data.`;
+}
+document.getElementById("csv").addEventListener("change",e=>{const f=e.target.files[0];if(!f)return;const st=document.getElementById("upStatus");
+  if(!/\.csv$/i.test(f.name)){st.textContent="Please choose a .csv file. In Excel or Google Sheets, use File > Download > CSV.";return}
+  const rd=new FileReader();rd.onload=()=>{try{loadRows(parseCSV(String(rd.result)),f.name)}catch(err){st.textContent="Couldn't read that file. "+err.message+" Check that it uses the template's column names."}};rd.readAsText(f)});
+})();
+
+(function(){var a=document.getElementById("tplDl");if(!a||!window.claude||!window.claude.use)return;
+var st=document.getElementById("upStatus");
+window.claude.use("downloads").then(function(d){if(!d)return;a.addEventListener("click",function(e){e.preventDefault();
+d.save({filename:"abm-account-template.csv",data:decodeURIComponent(a.getAttribute("href").split(",").slice(1).join(","))})
+.catch(function(err){if(st&&err&&err.code!=="declined")st.textContent="Download unavailable here. Get the template from the repo.";});});});})();
+</script>
+</body>
+</html>
